@@ -1,0 +1,194 @@
+---
+title: "Practical Machine Learning Assignment Writeup"
+author: "Lars Skjærven"
+date: "1/26/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE, eval=TRUE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+```
+
+## Assignment
+
+The goal of the project is to predict the exercise manner (or quality) of six participants based on a number of predictor variables. The outcome / manner is stored as the `classe` variable in the training set. We will explore a few classifiers to solve this problem, notably **random forest**, **gradient boosting**, **linear discriminant analysis**, **support vector machine**, and **k-nearest neighbour**. Finally we will apply the final model to predict the 20 cases in the test set. 
+
+
+## Import data
+
+Import required libraries, download data files, and use `read_csv()` to parse the csv files: 
+
+```{r libs}
+# Load required packages
+library(caret)
+library(readr)
+library(corrplot)
+```
+
+
+```{r import, echo=TRUE, results='hide', warning=FALSE, message=FALSE}
+# Download data files
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", "pml-train.csv")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", "pml-test.csv")
+
+# Read data
+train.orig <- read_csv("pml-train.csv")
+train.orig$classe <- as.factor(train.orig$classe)
+test.orig <- read_csv("pml-test.csv")
+```
+
+
+The training data consists of **`r dim(train.orig)[1]`** rows with **`r dim(train.orig)[2]`** columns. There are **`r dim(test.orig)[1]`** rows in the test set. 
+
+```{r overview}
+# Table of outcome 'classe'
+table(train.orig$classe)
+```
+
+
+## Data cleanup
+
+```{r cleandata}
+# remove first 7 columns 
+# id, user_name, timestamp, new_window
+train <- train.orig
+train <- train[, -c(1:7)]
+
+# remove NA-containing columns
+col.inds <- apply(train, 2, function(x) all(!is.na(x)))
+train <- train[, col.inds]
+```
+
+
+## Split data 
+
+to training and test set
+
+```{r splitdata}
+# split data set 
+inTrain <- createDataPartition(y=train$classe, p=0.7, list=FALSE)
+mytest <- train[-inTrain,]
+train <- train[inTrain,]
+dim(train)
+dim(mytest)
+```
+
+## Explore data
+
+```{r corrplot}
+m <- cor(train[, -c(ncol(train))])
+corrplot(m, method = "circle", tl.cex=0.5)
+```
+
+
+
+## Build models
+
+```{r traincontrol}
+# set up a trainControl object with 5-fold cross-validation
+trc <- trainControl(method="cv", number=5)
+```
+
+### Random forest
+
+```{r model_ranger}
+# Ranom forrest
+mod_rf <- train(classe ~ ., 
+                method="ranger", data=train, 
+                trControl=trc, 
+                importance = 'impurity')
+
+pred_rf <- predict(mod_rf, mytest)
+table(pred_rf, mytest$classe)
+cm_rf <- confusionMatrix(pred_rf, mytest$classe)
+cm_rf$overall["Accuracy"]
+```
+
+### Boosting
+
+```{r model_gbm}
+# Boosting
+mod_gbm <- train(classe ~ .,
+                 method="gbm", data=train, 
+                 trControl=trc, verbose=FALSE)
+
+pred_gbm <- predict(mod_gbm, mytest)
+table(pred_gbm, mytest$classe)
+cm_gbm <- confusionMatrix(pred_gbm, mytest$classe)
+cm_gbm$overall["Accuracy"]
+```
+
+
+### Linear Discriminant Analysis
+
+```{r model_lda}
+# Linear Discriminant Analysis
+mod_lda <- train(classe ~ .,
+                 method="lda", data=train, 
+                 trControl=trc)
+
+pred_lda <- predict(mod_lda, mytest)
+table(pred_lda, mytest$classe)
+cm_lda <- confusionMatrix(pred_lda, mytest$classe)
+cm_lda$overall["Accuracy"]
+```
+
+
+### k-nearest neighbors
+
+```{r knn}
+mod_knn <- train(classe ~ ., 
+                method = "knn",
+                data = train, 
+                trControl = trc)
+pred_knn <- predict(mod_knn, mytest)
+table(pred_knn, mytest$classe)
+cm_knn <- confusionMatrix(pred_knn, mytest$classe)
+cm_knn$overall["Accuracy"]
+```
+
+### SVM
+
+```{r svm}
+mod_svm <- train(classe ~ ., 
+                method = "svmLinear",
+                data = train, 
+                trControl = trc)
+pred_svm <- predict(mod_svm, mytest)
+table(pred_svm, mytest$classe)
+cm_svm <- confusionMatrix(pred_svm, mytest$classe)
+cm_svm$overall["Accuracy"]
+```
+
+
+
+## Exploring important variables on prediction
+```{r}
+# Find varialbe importance
+rfImp <- varImp(mod_rf)
+rfImp
+```
+
+
+```{r}
+# Plot important variables
+ggplot(train, aes(classe, pitch_forearm)) +
+  geom_boxplot(aes(col=classe)) 
+
+ggplot(train, aes(classe, roll_belt)) +
+  geom_boxplot(aes(col=classe)) 
+
+ggplot(train, aes(classe, yaw_belt)) +
+  geom_boxplot(aes(col=classe)) 
+
+ggplot(train, aes(classe, roll_forearm)) +
+  geom_boxplot(aes(col=classe)) 
+```
+
+
+## Predict on test set
+
+```{r predict}
+predict(mod_rf, test.orig)
+```
+
