@@ -1,7 +1,7 @@
 ---
 title: "Practical Machine Learning Assignment Writeup"
 author: "Lars Skjærven"
-date: "1/26/2018"
+date: "1/29/2018"
 output: html_document
 ---
 
@@ -9,14 +9,12 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 ```
 
-## Assignment
+## Introduction
 
-The goal of the project is to predict the exercise manner (or quality) of six participants based on a number of predictor variables. The outcome is stored in the `classe` variable of the training set. We will explore a several classifiers to solve this problem, notably **random forest**, **gradient boosting**, **linear discriminant analysis**, **support vector machine**, and **k-nearest neighbour**. Finally we will apply the final model to predict the 20 cases in the test set. 
-
-In addition, we will calculate the importance of the variables based on our most successful model, and use the result of the importance to explore the underlying data. 
+The goal of the project is to predict the exercise manner (or quality) of six participants based on a number of predictor variables. The outcome is stored in the `classe` variable of the training set. We will explore a several classifiers to solve this problem, notably **random forest**, **gradient boosting**, **linear discriminant analysis**, **support vector machine**, and **k-nearest neighbour**. Finally we will apply the final model to predict the 20 cases in the test set. We will further calculate the importance of the predictors (variables) based on our most successful model, and use the result of the importance to explore the underlying data. 
 
 
-## Import data
+## Data import
 
 Import required libraries, download data files, and use `read_csv()` to parse the csv files: 
 
@@ -50,22 +48,41 @@ table(train.orig$classe)
 
 ## Data cleanup
 
-The training dataset contains 7 columns that does not provide informative data for predicting the training outcome: **`r paste(colnames(train.orig)[1:7], sep=", ")`**. In addition, there are **`r sum(apply(train.orig, 2, function(x) !all(!is.na(x))))`** variables with a large number of missing (`NA`) values that we will ommit for further analysis:
+The training dataset contains 7 columns that does not provide informative data for predicting the training outcome: **`r paste(colnames(train.orig)[1:7], sep=", ")`**. 
 
-```{r cleandata}
+
+```{r cleandata1}
 # Remove first 7 columns 
 train <- train.orig
 train <- train[, -c(1:7)]
+```
+ 
+In addition, there are **`r sum(apply(train.orig, 2, function(x) !all(!is.na(x))))`** variables with a large number of missing (`NA`) values that we will ommit for further analysis:
 
-# Remove NA-containing columns
-col.inds <- apply(train, 2, function(x) all(!is.na(x)))
-train <- train[, col.inds]
+
+```{r cleandata2}
+# Explore missing data rows/cols
+missing <- apply(train, 2, function(x) sum(is.na(x)))
+table(missing)
+
+# Chop off columns with lots of missing data
+excl.inds <- missing < 5
+train <- train[, excl.inds]
 ```
 
-That leaves us with **`r ncol(train)-1`** variables in the training dataset. That is only **`r round( (ncol(train)-1) / (ncol(train.orig)-8), 2) * 100`** % of the variables of the original data set. To aovid this we could attempt to impute missing values, but we will check how our prediction will work without these variables before imputing. 
+
+There seems to be one row with `r max(apply(train, 1, function(x) sum(is.na(x))))` missing values. Delete row:
+
+```{r cleandata3}
+# Where are the other misisng data points?
+excl.rows <- which(apply(train, 1, function(x) sum(is.na(x))) > 0)
+train <- train[-excl.rows, ]
+```
+
+That leaves us with **`r ncol(train)-1`** variables in the training dataset. That is only **`r round( (ncol(train)-1) / (ncol(train.orig)-8), 2) * 100`** % of the variables of the original data set. 
 
 
-## Split data 
+## Data partitioning
 
 Let's split the training set into a test and training set using the `createDataPartition()` function of the R package:
 
@@ -78,7 +95,7 @@ train <- train[inTrain,]
 
 We now have **`r nrow(mytest)`** rows in the test set and **`r nrow(train)`** rows in the final training set. 
 
-## Build models
+## Model building
 
 Set up a common `trainControl` object to use in all models we explore. We will use a **5-fold cross-validation** in the following models. 
 
@@ -112,18 +129,23 @@ cm_rf <- confusionMatrix(pred_rf, mytest$classe)
 This model provides an accuracy of **`r round(cm_rf$overall["Accuracy"], 3)`**. That's pretty good... 
 
 
-## Exploring important variables on prediction
+## Exploring correlated predictors and important variables
 
-So what's the important variables here? There are no clear correlations in the dataset:
+
 
 
 ```{r corrplot}
+# Correlation matrix
 m <- cor(train[, -c(ncol(train))])
-corrplot(m, method = "circle", tl.cex=0.5)
+
+# Find correlated predictors
+highlyCorDescr <- findCorrelation(m, cutoff = .9)
+highlyCorDescr
+corrplot(m[highlyCorDescr, highlyCorDescr])
 ```
 
 
-But we can use `varImp()` of the **caret** package to explore what's driving the prediction:
+Use `varImp()` of the **caret** package to explore what's driving the prediction:
 
 ```{r}
 # Find varialbe importance
@@ -132,7 +154,7 @@ rfImp
 ```
 
 
-Let's plot some of these important variables:
+The following box plots illustrate some of the predictor values important for the predictions. E.g. `pitch_forearm` close to 0 seems important for obtaining an **A**. 
 
 ```{r}
 # Plot important variables
@@ -142,14 +164,14 @@ ggplot(train, aes(classe, pitch_forearm)) +
 ggplot(train, aes(classe, roll_belt)) +
   geom_boxplot(aes(col=classe)) 
 
-ggplot(train, aes(classe, yaw_belt)) +
+ggplot(train, aes(classe, magnet_dumbbell_z)) +
   geom_boxplot(aes(col=classe)) 
 
-ggplot(train, aes(classe, roll_forearm)) +
+ggplot(train, aes(classe, yaw_belt)) +
   geom_boxplot(aes(col=classe)) 
 ```
 
-It certainly looks like you need a `pitch_forearm` close to 0 for a `classe` A (median close to 0), `roll_belt` values of 0 (median close to 0), smaller `yaw_belt` (median close to -90), and a `roll_forearm` close to 0. 
+
 
 
 ## Final prediction on the test set
@@ -222,10 +244,27 @@ cm_svm <- confusionMatrix(pred_svm, mytest$classe)
 cm_svm$overall["Accuracy"]
 ```
 
+## Preprocessing data
+
+
+```{r model_gbm_pp}
+# Boosting
+mod_gbm_pp <- train(classe ~ .,
+                 method="gbm", data=train, 
+                 preProcess=c("center", "scale"),
+                 trControl=trc, verbose=FALSE)
+
+pred_gbm_pp <- predict(mod_gbm_pp, mytest)
+table(pred_gbm_pp, mytest$classe)
+cm_gbm_pp <- confusionMatrix(pred_gbm_pp, mytest$classe)
+cm_gbm_pp$overall["Accuracy"]
+```
+
+
 
 ## Conclusion
 
-Random forest seems to be an excellent model for predicting exercise manner with an accuracy of **`r round(cm_rf$overall["Accuracy"], 3)`**. k-NN gives an accuracy of **`r round(cm_knn$overall["Accuracy"], 3)`** while gradient boosting gives an accuracy of **`r round(cm_gbm$overall["Accuracy"], 3)`**. 
+Random forest seems to be an excellent model for predicting exercise manner with an accuracy of **`r round(cm_rf$overall["Accuracy"], 3)`**. k-NN gives an accuracy of **`r round(cm_knn$overall["Accuracy"], 3)`** while gradient boosting gives an accuracy of **`r round(cm_gbm$overall["Accuracy"], 3)`**. Based on the overall excellent results we will skip the attempt to impute missing values. 
 
 
 ## Current session info
