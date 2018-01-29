@@ -79,12 +79,11 @@ excl.rows <- which(apply(train, 1, function(x) sum(is.na(x))) > 0)
 train <- train[-excl.rows, ]
 ```
 
-That leaves us with **`r ncol(train)-1`** variables in the training dataset. That is only **`r round( (ncol(train)-1) / (ncol(train.orig)-8), 2) * 100`** % of the variables of the original data set. 
-
+That leaves us with **`r ncol(train)-1`** predictor variables in the training dataset. 
 
 ## Data partitioning
 
-Let's split the training set into a test and training set using the `createDataPartition()` function of the R package:
+For building the model we need a test set with known `classe` outcome variable. Let's split the training set into a test and training set using the `createDataPartition()` function of the caret package:
 
 ```{r splitdata}
 # Split data set 
@@ -93,7 +92,7 @@ mytest <- train[-inTrain,]
 train <- train[inTrain,]
 ```
 
-We now have **`r nrow(mytest)`** rows in the test set and **`r nrow(train)`** rows in the final training set. 
+This gives **`r nrow(mytest)`** rows in the test set and **`r nrow(train)`** rows in the final training set. 
 
 ## Model building
 

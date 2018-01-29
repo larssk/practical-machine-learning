@@ -174,16 +174,16 @@ train &lt;- train[, excl.inds]</code></pre>
 <pre class="r"><code># Where are the other misisng data points?
 excl.rows &lt;- which(apply(train, 1, function(x) sum(is.na(x))) &gt; 0)
 train &lt;- train[-excl.rows, ]</code></pre>
-<p>That leaves us with <strong>52</strong> variables in the training dataset. That is only <strong>34</strong> % of the variables of the original data set.</p>
+<p>That leaves us with <strong>52</strong> predictor variables in the training dataset.</p>
 </div>
 <div id="data-partitioning" class="section level2">
 <h2>Data partitioning</h2>
-<p>Let’s split the training set into a test and training set using the <code>createDataPartition()</code> function of the R package:</p>
+<p>For building the model we need a test set with known <code>classe</code> outcome variable. Let’s split the training set into a test and training set using the <code>createDataPartition()</code> function of the caret package:</p>
 <pre class="r"><code># Split data set 
 inTrain &lt;- createDataPartition(y=train$classe, p=0.7, list=FALSE)
 mytest &lt;- train[-inTrain,]
 train &lt;- train[inTrain,]</code></pre>
-<p>We now have <strong>5884</strong> rows in the test set and <strong>13737</strong> rows in the final training set.</p>
+<p>This gives <strong>5884</strong> rows in the test set and <strong>13737</strong> rows in the final training set.</p>
 </div>
 <div id="model-building" class="section level2">
 <h2>Model building</h2>
