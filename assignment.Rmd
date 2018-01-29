@@ -11,7 +11,9 @@ knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 
 ## Assignment
 
-The goal of the project is to predict the exercise manner (or quality) of six participants based on a number of predictor variables. The outcome / manner is stored as the `classe` variable in the training set. We will explore a few classifiers to solve this problem, notably **random forest**, **gradient boosting**, **linear discriminant analysis**, **support vector machine**, and **k-nearest neighbour**. Finally we will apply the final model to predict the 20 cases in the test set. 
+The goal of the project is to predict the exercise manner (or quality) of six participants based on a number of predictor variables. The outcome is stored in the `classe` variable of the training set. We will explore a several classifiers to solve this problem, notably **random forest**, **gradient boosting**, **linear discriminant analysis**, **support vector machine**, and **k-nearest neighbour**. Finally we will apply the final model to predict the 20 cases in the test set. 
+
+In addition, we will calculate the importance of the variables based on our most successful model, and use the result of the importance to explore the underlying data. 
 
 
 ## Import data
@@ -38,7 +40,7 @@ test.orig <- read_csv("pml-test.csv")
 ```
 
 
-The training data consists of **`r dim(train.orig)[1]`** rows with **`r dim(train.orig)[2]`** columns. There are **`r dim(test.orig)[1]`** rows in the test set. 
+The training data consists of **`r dim(train.orig)[1]`** rows with **`r dim(train.orig)[2]`** columns. There are **`r dim(test.orig)[1]`** rows in the test set. The `classe` variable contains the following grades:
 
 ```{r overview}
 # Table of outcome 'classe'
@@ -48,48 +50,47 @@ table(train.orig$classe)
 
 ## Data cleanup
 
+The training dataset contains 7 columns that does not provide informative data for predicting the training outcome: **`r paste(colnames(train.orig)[1:7], sep=", ")`**. In addition, there are **`r sum(apply(train.orig, 2, function(x) !all(!is.na(x))))`** variables with a large number of missing (`NA`) values that we will ommit for further analysis:
+
 ```{r cleandata}
-# remove first 7 columns 
-# id, user_name, timestamp, new_window
+# Remove first 7 columns 
 train <- train.orig
 train <- train[, -c(1:7)]
 
-# remove NA-containing columns
+# Remove NA-containing columns
 col.inds <- apply(train, 2, function(x) all(!is.na(x)))
 train <- train[, col.inds]
 ```
 
+That leaves us with **`r ncol(train)-1`** variables in the training dataset. That is only **`r round( (ncol(train)-1) / (ncol(train.orig)-8), 2) * 100`** % of the variables of the original data set. To aovid this we could attempt to impute missing values, but we will check how our prediction will work without these variables before imputing. 
+
 
 ## Split data 
 
-to training and test set
+Let's split the training set into a test and training set using the `createDataPartition()` function of the R package:
 
 ```{r splitdata}
-# split data set 
+# Split data set 
 inTrain <- createDataPartition(y=train$classe, p=0.7, list=FALSE)
 mytest <- train[-inTrain,]
 train <- train[inTrain,]
-dim(train)
-dim(mytest)
 ```
 
-## Explore data
-
-```{r corrplot}
-m <- cor(train[, -c(ncol(train))])
-corrplot(m, method = "circle", tl.cex=0.5)
-```
-
-
+We now have **`r nrow(mytest)`** rows in the test set and **`r nrow(train)`** rows in the final training set. 
 
 ## Build models
+
+Set up a common `trainControl` object to use in all models we explore. We will use a **5-fold cross-validation** in the following models. 
 
 ```{r traincontrol}
 # set up a trainControl object with 5-fold cross-validation
 trc <- trainControl(method="cv", number=5)
 ```
 
+
 ### Random forest
+
+We start with exploring the **random forest** algorithm (provided with the **ranger** package):
 
 ```{r model_ranger}
 # Ranom forrest
@@ -98,13 +99,74 @@ mod_rf <- train(classe ~ .,
                 trControl=trc, 
                 importance = 'impurity')
 
+# Predict on test data
 pred_rf <- predict(mod_rf, mytest)
+
+# Cross-table
 table(pred_rf, mytest$classe)
+
+# Calcualte confusion matrix
 cm_rf <- confusionMatrix(pred_rf, mytest$classe)
-cm_rf$overall["Accuracy"]
 ```
 
-### Boosting
+This model provides an accuracy of **`r round(cm_rf$overall["Accuracy"], 3)`**. That's pretty good... 
+
+
+## Exploring important variables on prediction
+
+So what's the important variables here? There are no clear correlations in the dataset:
+
+
+```{r corrplot}
+m <- cor(train[, -c(ncol(train))])
+corrplot(m, method = "circle", tl.cex=0.5)
+```
+
+
+But we can use `varImp()` of the **caret** package to explore what's driving the prediction:
+
+```{r}
+# Find varialbe importance
+rfImp <- varImp(mod_rf)
+rfImp
+```
+
+
+Let's plot some of these important variables:
+
+```{r}
+# Plot important variables
+ggplot(train, aes(classe, pitch_forearm)) +
+  geom_boxplot(aes(col=classe)) 
+
+ggplot(train, aes(classe, roll_belt)) +
+  geom_boxplot(aes(col=classe)) 
+
+ggplot(train, aes(classe, yaw_belt)) +
+  geom_boxplot(aes(col=classe)) 
+
+ggplot(train, aes(classe, roll_forearm)) +
+  geom_boxplot(aes(col=classe)) 
+```
+
+It certainly looks like you need a `pitch_forearm` close to 0 for a `classe` A (median close to 0), `roll_belt` values of 0 (median close to 0), smaller `yaw_belt` (median close to -90), and a `roll_forearm` close to 0. 
+
+
+## Final prediction on the test set
+
+Based on the random forest model we predict the 20 data points of the test set:
+
+```{r predict}
+predict(mod_rf, test.orig)
+```
+
+
+## Exploring other models 
+
+Although the random forest model provides an accuracy of **`r round(cm_rf$overall["Accuracy"], 3)`**, we will check if other popular algorithms performs equivalently good under default settings:  
+
+### Gradient Boosting
+
 
 ```{r model_gbm}
 # Boosting
@@ -161,34 +223,14 @@ cm_svm$overall["Accuracy"]
 ```
 
 
+## Conclusion
 
-## Exploring important variables on prediction
-```{r}
-# Find varialbe importance
-rfImp <- varImp(mod_rf)
-rfImp
-```
+Random forest seems to be an excellent model for predicting exercise manner with an accuracy of **`r round(cm_rf$overall["Accuracy"], 3)`**. k-NN gives an accuracy of **`r round(cm_knn$overall["Accuracy"], 3)`** while gradient boosting gives an accuracy of **`r round(cm_gbm$overall["Accuracy"], 3)`**. 
 
+
+## Current session info
 
 ```{r}
-# Plot important variables
-ggplot(train, aes(classe, pitch_forearm)) +
-  geom_boxplot(aes(col=classe)) 
-
-ggplot(train, aes(classe, roll_belt)) +
-  geom_boxplot(aes(col=classe)) 
-
-ggplot(train, aes(classe, yaw_belt)) +
-  geom_boxplot(aes(col=classe)) 
-
-ggplot(train, aes(classe, roll_forearm)) +
-  geom_boxplot(aes(col=classe)) 
+# Information about the current session
+sessionInfo()
 ```
-
-
-## Predict on test set
-
-```{r predict}
-predict(mod_rf, test.orig)
-```
-
