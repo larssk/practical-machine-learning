@@ -264,7 +264,7 @@ cm_gbm_pp$overall["Accuracy"]
 
 ## Conclusion
 
-Random forest seems to be an excellent model for predicting exercise manner with an accuracy of **`r round(cm_rf$overall["Accuracy"], 3)`**. k-NN gives an accuracy of **`r round(cm_knn$overall["Accuracy"], 3)`** while gradient boosting gives an accuracy of **`r round(cm_gbm$overall["Accuracy"], 3)`**. Based on the overall excellent results we will skip the attempt to impute missing values. 
+Random forest seems to be an excellent model for predicting exercise manner with an accuracy of **`r round(cm_rf$overall["Accuracy"], 3)`**. k-NN gives an accuracy of **`r round(cm_knn$overall["Accuracy"], 3)`** while gradient boosting gives an accuracy of **`r round(cm_gbm$overall["Accuracy"], 3)`**. 
 
 
 ## Current session info
