@@ -1,6 +1,6 @@
 ---
 title: "Practical Machine Learning Assignment Writeup"
-author: "Lars Skjærven"
+author: "Lars Skjaerven"
 date: "1/29/2018"
 output: html_document
 ---
@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 
 ## Introduction
 
-The goal of the project is to predict the exercise manner (or quality) of six participants based on a number of predictor variables. The outcome is stored in the `classe` variable of the training set. We will explore a several classifiers to solve this problem, notably **random forest**, **gradient boosting**, **linear discriminant analysis**, **support vector machine**, and **k-nearest neighbour**. Finally we will apply the final model to predict the 20 cases in the test set. We will further calculate the importance of the predictors (variables) based on our most successful model, and use the result of the importance to explore the underlying data. 
+The goal of the project is to predict the exercise manner (or quality) of six participants based on a number of predictor variables. The outcome is stored in the `classe` variable of the training set. I will explore several classifiers to solve this problem, notably **random forest**, **gradient boosting**, **linear discriminant analysis**, **support vector machine**, and **k-nearest neighbour**. Finally I will apply the best model to predict the 20 cases in the test set. I will further calculate the importance of the predictors (variables) based on our most successful model, and use the result of the importance to explore the underlying data. 
 
 
 ## Data import
@@ -106,10 +106,10 @@ trc <- trainControl(method="cv", number=5)
 
 ### Random forest
 
-We start with exploring the **random forest** algorithm (provided with the **ranger** package):
+We start with exploring the **random forest** algorithm (provided with the **ranger** package). Use the train control object defined above with 5-fold cross-validation. Specify `importance = 'impurity'` to obtain the importance of the variables in the fitting. Use `predict` on the test set, and call `confusionMatrix()` to evaluate the model.
 
 ```{r model_ranger}
-# Ranom forrest
+# Random forest
 mod_rf <- train(classe ~ ., 
                 method="ranger", data=train, 
                 trControl=trc, 
@@ -125,35 +125,28 @@ table(pred_rf, mytest$classe)
 cm_rf <- confusionMatrix(pred_rf, mytest$classe)
 ```
 
-This model provides an accuracy of **`r round(cm_rf$overall["Accuracy"], 3)`**. That's pretty good... 
-
-
-## Exploring correlated predictors and important variables
-
-
-
-
-```{r corrplot}
-# Correlation matrix
-m <- cor(train[, -c(ncol(train))])
-
-# Find correlated predictors
-highlyCorDescr <- findCorrelation(m, cutoff = .9)
-highlyCorDescr
-corrplot(m[highlyCorDescr, highlyCorDescr])
-```
-
+This model provides a fantastic accuracy of **`r round(cm_rf$overall["Accuracy"], 3)`**. 
 
 Use `varImp()` of the **caret** package to explore what's driving the prediction:
 
-```{r}
+```{r varimp}
 # Find varialbe importance
 rfImp <- varImp(mod_rf)
-rfImp
+
+# Make a barplot
+df <- data.frame(Importance = unname(rfImp$importance), Vars=rownames(rfImp$importance))
+df = df[order(df$Importance, decreasing = TRUE), ][1:15, ]
+
+# Plot importance
+ggplot(df, aes(x = reorder(Vars, Importance), 
+    y = Importance, fill = Importance)) +
+  geom_bar(stat='identity') + 
+  labs(x = 'Variables') +
+  coord_flip() 
 ```
 
 
-The following box plots illustrate some of the predictor values important for the predictions. E.g. `pitch_forearm` close to 0 seems important for obtaining an **A**. 
+Looks like a few key variables are driving most of the model with **pitch_forearm** and **roll_belt** being the most important. How does the underlying data look like? The following box plots illustrate some of they key variables. E.g. `pitch_forearm` close to 0 seems important for obtaining an **A**. 
 
 ```{r}
 # Plot important variables
@@ -164,9 +157,6 @@ ggplot(train, aes(classe, roll_belt)) +
   geom_boxplot(aes(col=classe)) 
 
 ggplot(train, aes(classe, magnet_dumbbell_z)) +
-  geom_boxplot(aes(col=classe)) 
-
-ggplot(train, aes(classe, yaw_belt)) +
   geom_boxplot(aes(col=classe)) 
 ```
 
@@ -184,7 +174,7 @@ predict(mod_rf, test.orig)
 
 ## Exploring other models 
 
-Although the random forest model provides an accuracy of **`r round(cm_rf$overall["Accuracy"], 3)`**, we will check if other popular algorithms performs equivalently good under default settings:  
+Although the random forest model provides an accuracy of **`r round(cm_rf$overall["Accuracy"], 3)`**, we will check how other popular algorithms performs under default settings:
 
 ### Gradient Boosting
 
@@ -245,7 +235,6 @@ cm_svm$overall["Accuracy"]
 
 ## Preprocessing data
 
-
 ```{r model_gbm_pp}
 # Boosting
 mod_gbm_pp <- train(classe ~ .,
@@ -258,6 +247,7 @@ table(pred_gbm_pp, mytest$classe)
 cm_gbm_pp <- confusionMatrix(pred_gbm_pp, mytest$classe)
 cm_gbm_pp$overall["Accuracy"]
 ```
+
 
 
 
